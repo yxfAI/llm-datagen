@@ -28,7 +28,13 @@ def setup_llm_model():
     """设置 LLM 模型"""
     from llm_datagen.llm import model_container
     try:
-        api_key =""
+        # 从同目录下的 hello.txt 获取 api_key
+        key_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hello.txt")
+        api_key = ""
+        if os.path.exists(key_path):
+            with open(key_path, "r", encoding="utf-8") as f:
+                api_key = f.read().strip()
+        
         model_container.register(
             name="example_model",
             model="doubao-seed-1-6-251015",
@@ -498,12 +504,12 @@ def run_case_13():
 if __name__ == "__main__":
     setup_llm_model()
     
-    run_case_1()
-    run_case_2()
+    # run_case_1()
+    # run_case_2()
     run_case_3()
-    # run_case_4()
-    # run_case_5()
-    # run_case_6()
+    run_case_4()
+    run_case_5()
+    run_case_6()
     # run_case_7()
     # run_case_8()
     # run_case_9()

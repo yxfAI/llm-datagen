@@ -1,33 +1,46 @@
 # llm-datagen: 极简高性能流式数据加工库
 
-> **如果你在处理百万级 LLM 数据时曾遭遇过 OOM、磁盘 I/O 锁死，或因程序崩溃导致昂贵的 API 费用重跑，那么 llm-datagen 正是为你设计的。**
+> **为大规模 LLM 数据工程而生。在处理千万级数据时，让开发者专注于算子逻辑，而非担心性能、 OOM、磁盘锁死或崩溃后的繁琐重跑。**
 
-llm-datagen 是一个专为大规模数据加工、LLM 语料清洗以及数据生成设计的轻量级 Python 框架。它在保持极致简单的 API 的同时，提供了工业级的可靠性（断点续传）和极致的并发性能（流式处理与异步 I/O）。
+`llm-datagen` 是一个轻量级数据加工框架，专为 **LLM 语料清洗、合成数据生成以及复杂 ETL 任务** 设计。它在保持极简 API 的同时，通过流式架构、异步 I/O 和断点续传机制，解决了大规模数据处理中的稳定性与性能瓶颈。
 
 ---
 
 ## 1. 为什么选择 llm-datagen？
 
-*   💰 **保护钱包**：采用“最多一次”语义与物理位点记录，确保 LLM 调用绝不重跑，崩溃后秒级恢复。
-*   🧠 **保护内存**：内置“传输级背压”机制，上游自动根据下游消费速度降速，彻底告别 OOM。
-*   ⚡ **榨干性能**：单写者异步总线解耦计算与 I/O，支持批次间并行与批次内并发的双层火力。
-*   🧩 **算子自适应**：算子只需实现 `process_item` 或 `process_batch`，框架自动完成高性能并发封装。
-*   🔌 **协议中立**：一套代码无缝切换 `JSONL`、`CSV`、`Memory` 或本地/远程存储。
+### 🧠 LLM 原生适配 (Model-Centric)
+*   **双模式自适应**：原生支持单条处理 (`process_item`) 与 批量处理 (`process_batch`)。
+*   **批次内并发**：对于仅支持单条处理的算子，框架自动在批次内部开启线程池并发，实现计算效率最大化。
+*   **上下文感知**：内置进度汇报、Token 审计与动态取消信号，完美契合 LLM 调用场景。
+
+### ⚡ 极致性能优化 (Performance First)
+*   **双层火力全开**：支持“跨批次并行”与“批次内并发”的双层调度模型，彻底压榨 CPU 与 I/O 潜力。
+*   **异步刷盘总线**：采用单写者异步总线架构，计算与写入彻底解耦，消除高并发下的磁盘 I/O 锁竞争。
+*   **流式零延迟**：全链路流式传输，上游产出一条，下游立即消费，无需等待整个文件处理完成。
+
+### 💾 工业级可靠性 (Data Persistence)
+*   **物理位点记录**：基于 `.done` 封条与镜像级状态快照，确保任务在任何时刻崩溃都能从中断点秒级恢复。
+*   **透明的 ID 体系**：物理级 ID (`_i`) 透传机制，即使在 1:N 爆炸分发场景下，也能精准追溯每一行数据的来源。
+*   **传输级背压**：内置有界缓冲队列，当下游写入或处理变慢时自动抑制上游，保持内存占用恒定，彻底告别 OOM。
+
+### 🧩 灵活应对变化 (Built for Change)
+*   **意图驱动寻址**：通过 URI（`jsonl://`, `csv://`, `memory://`）抽象存储，一套代码无缝切换本地磁盘与远程协议。
+*   **动态路径焊接**：支持全自动路径推导，也允许对单个节点进行显式路径覆盖，轻松应对复杂的 DAG 拓扑调整。
+*   **轻量级无侵入**：仅需实现一个函数或继承一个基类，即可让普通 Python 逻辑升级为工业级流水线。
 
 ---
 
 ## 2. 核心特性
 
-*   🚀 **极致并发**：支持“批次间并行”与“批次内并发”的双层火力，自动适配 CPU 密集与 I/O 密集任务。
-*   🛠️ **算子多态适配**：开发者只需编写 `process_item` 或 `process_batch`，框架自动完成高性能并行封装与 1:N 爆炸分发。
-*   💾 **断点续传 (Recovery)**：物理级封条机制 (`.done`) 与镜像级状态快照，确保任务在崩溃后能从中断点精准恢复，绝不重复扣费（LLM 友好）。
-*   🌪️ **流式总线 (Streaming)**：全链路流式传输，上游处理一条，下游立即消费，内存占用恒定，不随数据量增加。
-*   🚥 **内置背压 (Backpressure)**：通过信号量与有界异步队列双重保护，彻底终结大规模任务下的 OOM（内存溢出）噩梦。
-*   🔌 **协议中立**：一套代码无缝切换 `JSONL`、`CSV`、`Memory` 或远程存储。
+*   🚀 **双层调度模型**：自动适配 I/O 密集（LLM 调用）与 CPU 密集（文本清洗）任务。
+*   🛠️ **算子多态适配**：自动完成并行封装、错误重试与 1:N 爆炸分发。
+*   💾 **精准断点续传**：通过物理位点寻址，确保崩溃后不重跑已处理的原始数据，保证数据连续性。
+*   🚥 **全链路背压控制**：通过信号量与有界队列双重保护，在处理千万级任务时内存始终处于安全水位。
+*   🔌 **协议中立**：支持 JSONL、CSV、Memory 等多种存储协议，支持自定义协议扩展。
 
 ---
 
-## 2. 快速开始 (Usage Demo)
+## 3. 快速开始 (Usage Demo)
 
 ### 3.1 安装
 
@@ -37,88 +50,45 @@ pip install llm-datagen
 
 ### 3.2 极简管道示例
 
-只需几行代码，即可构建一个带断点续传能力的加工管道。
-
 ```python
 from llm_datagen import UnifiedPipeline, FunctionOperator
 
-# 1. 定义你的业务算子 (只需关注单条逻辑)
-def my_process(item):
-    return {"text": item["text"].upper(), "len": len(item["text"])}
+# 1. 定义简单的逻辑算子
+def clean_text(item):
+    # 处理逻辑：如清洗、转换、格式化
+    return {"text": item["text"].strip(), "len": len(item["text"])}
 
-# 2. 构建并运行管道
+# 2. 构建高性能管道
 pipeline = UnifiedPipeline(operators=[
-    FunctionOperator(my_process)
+    FunctionOperator(clean_text)
 ])
 
-# 3. 执行任务 (支持 JSONL/CSV 协议)
+# 3. 运行任务：自动处理并发、背压与路径寻址
 pipeline.create(
-    pipeline_id="hello_llm_datagen",
+    pipeline_id="my_first_task",
     input_uri="jsonl://input.jsonl",
     output_uri="jsonl://output.jsonl",
-    parallel_size=5  # 开启 5 并发
+    parallel_size=10  # 开启 10 个跨批次并行
 )
 pipeline.run()
 ```
 
-### 3.3 恢复运行
+---
 
-如果程序中途崩溃，只需调用 `resume`：
+## 4. 适用场景
 
-```python
-pipeline = UnifiedPipeline(operators=[...])
-pipeline.resume(pipeline_id="hello_llm_datagen")
-pipeline.run() # 自动从断点继续
-```
+*   **LLM 语料清洗**：利用多线程并发与流式架构，快速处理海量文本数据。
+*   **合成数据生成**：结合 `1:N` 分发能力，将种子数据通过 LLM 扩展为高质量训练集。
+*   **高性能 ETL**：在需求频繁变化的场景下，通过配置化 URI 和自适应算子快速调整链路。
+*   **长时任务运行**：依靠断点续传能力，稳健运行需要耗时数天的大规模加工任务。
 
 ---
 
-## 4. 开发者定义 (Developer Guide)
+## 5. 文档
 
-### 4.1 定义算子 (Operator)
-
-llm-datagen 支持三种方式定义算子：
-
-1.  **函数包装**：使用 `FunctionOperator(func)`。
-2.  **继承 `BaseOperator` (推荐)**：实现 `process_item`（简单）或 `process_batch`（高性能，适合 LLM 批量调用）。
-
-```python
-from llm_datagen.core.operators import BaseOperator
-
-class MyLLMOperator(BaseOperator):
-    def process_batch(self, items, ctx=None):
-        # 批量调用 LLM API
-        results = call_llm_api([it["prompt"] for it in items])
-        return [{"output": res} for res in results]
-```
-
-### 4.2 高级配置 (`WriterConfig`)
-
-你可以通过 `WriterConfig` 压榨 I/O 性能或控制背压：
-
-```python
-from llm_datagen import WriterConfig
-
-writer_config = WriterConfig(
-    async_mode=True,       # 开启异步写入
-    queue_size=1000,       # 背压队列大小
-    flush_batch_size=100   # 聚合 100 条写入一次磁盘
-)
-
-pipeline.create(..., writer_config=writer_config)
-```
-
----
-
-## 4. 架构与进阶文档
-
-llm-datagen 提供了完善的文档矩阵，帮助你从入门到精通：
-
-*   💡 **[业务使用指南 (USER_GUIDE.md)](docs/USER_GUIDE.md)**：面向使用者。涵盖算子开发、管道配置、断点恢复与实战模式。
-*   ⚙️ **[扩展开发指南 (DEVELOPER_GUIDE.md)](docs/DEVELOPER_GUIDE.md)**：面向二次开发。涵盖自定义 Bus、协议扩展与深度钩子集成。
-*   📖 **[架构详解 (DETAIL.md)](docs/DETAIL.md)**：深层原理。深入了解 Node、Bus 和 Pipeline 的生命周期与物理协议。
-*   ❓ **[FAQ / 避坑指南 (QUESTION.md)](docs/QUESTION.md)**：血泪教训。涵盖了死锁幽灵、位点幻读、背压控制等核心问题的解决方案。
-*   🏗️ **[架构白皮书 (DEVELOPMENT.md)](DEVELOPMENT.md)**：顶层设计。界定了项目在整个生态系统中的位置与设计哲学。
+*   💡 **[详细使用手册 (USER_GUIDE.md)](docs/USER_GUIDE.md)**：涵盖算子开发、管道配置、高级参数。
+*   ⚙️ **[开发者指南 (DEVELOPER_GUIDE.md)](docs/DEVELOPER_GUIDE.md)**：涵盖自定义协议实现、核心原理。
+*   ❓ **[架构问答 (QUESTION.md)](docs/QUESTION.md)**：核心决策背后的思考与避坑指南。
 
 ---
 
