@@ -545,7 +545,7 @@ class UnifiedOperatorPipeline(UnifiedNodePipeline):
                  batch_size: int = 1,
                  parallel_size: int = 1,
                  streaming: bool = False,
-                 protocol_prefix: str = "node_",
+                 protocol_prefix: str = "",
                  base_path: str = "tmp",
                  default_protocol: str = "jsonl://",
                  bus_factory: RecoverableStreamFactory = None,

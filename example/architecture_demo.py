@@ -123,7 +123,8 @@ def run_case_1():
         operators=[TranslationOperator(), WordCountOperator()],
         input_uri=f"jsonl://{input_file}", 
         output_uri="jsonl://tmp/demo/result1.jsonl", 
-        base_path="tmp/"
+        base_path="tmp/",
+        protocol_prefix="hello"
     )
     pipeline.create(pipeline_id="case1_simple")
     pipeline.run()
@@ -504,12 +505,12 @@ def run_case_13():
 if __name__ == "__main__":
     setup_llm_model()
     
-    # run_case_1()
+    run_case_1()
     # run_case_2()
-    run_case_3()
-    run_case_4()
-    run_case_5()
-    run_case_6()
+    # run_case_3()
+    # run_case_4()
+    # run_case_5()
+    # run_case_6()
     # run_case_7()
     # run_case_8()
     # run_case_9()

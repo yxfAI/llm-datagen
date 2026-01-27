@@ -109,7 +109,7 @@ llm-datagen 支持根据业务复杂度“丝滑切换”运行模式：
     *   **场景**：上下游节点协同工作，消除等待间隔。利用 `process_item` 的**批次内线程池并发**压榨 I/O。
     *   **协议**：支持 `csv://` 或 `jsonl://`，内置“零进度退火”防御早产 EOF。
 4.  **旗舰：工业级生产 (Recoverable & Async Mode)**
-    *   **配置**：`recoverable=True` + `WriterConfig(async_mode=True, queue_size=K)`
+    *   **配置**：`WriterConfig(async_mode=True, queue_size=K)` (断点续传默认为物理持久化协议开启)
     *   **场景**：处理数百万级 LLM 数据。具备断点续传能力，利用**单写者异步总线**消除 I/O 瓶颈，并开启**传输级背压**彻底终结 OOM。
 
 ---
