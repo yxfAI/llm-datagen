@@ -1,0 +1,6 @@
+tmp/
+.DS_Store
+logs/
+build/
+dist/
+example/hello.txt
