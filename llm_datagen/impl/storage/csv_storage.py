@@ -1,12 +1,12 @@
-import csv
 import os
+import pandas as pd
 from typing import List, Any
 from llm_datagen.core.storage import IStorage
 
 class CsvStorage(IStorage):
     """
-    CSV 存储实现
-    注意：CSV 格式通常要求所有行的列结构保持一致。
+    基于 Pandas 实现的 CSV 存储
+    能够正确处理单元格内换行符，确保进度统计准确。
     """
     def __init__(self, file_path: str, delimiter: str = ','):
         self.file_path = file_path
@@ -18,45 +18,64 @@ class CsvStorage(IStorage):
         if not items:
             return
         
-        file_exists = os.path.exists(self.file_path)
-        # 确保所有 items 都是字典
+        # 确保数据格式统一为 DataFrame
         valid_items = [item if isinstance(item, dict) else {"data": item} for item in items]
+        df = pd.DataFrame(valid_items)
         
-        with open(self.file_path, 'a', newline='', encoding='utf-8') as f:
-            # 以第一条数据的 key 作为表头
-            fieldnames = valid_items[0].keys()
-            writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=self.delimiter)
-            
-            if not file_exists:
-                writer.writeheader()
-            
-            writer.writerows(valid_items)
+        file_exists = os.path.exists(self.file_path)
+        
+        # 使用 pandas 的追加模式
+        # 如果文件不存在，写入表头；如果已存在，则不写表头
+        df.to_csv(
+            self.file_path, 
+            mode='a', 
+            index=False, 
+            header=not file_exists, 
+            sep=self.delimiter,
+            encoding='utf-8'
+        )
 
     def read(self, offset: int, limit: int) -> List[Any]:
-        results = []
         if not os.path.exists(self.file_path):
             return []
             
-        with open(self.file_path, 'r', newline='', encoding='utf-8') as f:
-            reader = csv.DictReader(f, delimiter=self.delimiter)
-            # 跳过位点
-            count = 0
-            for row in reader:
-                if count < offset:
-                    count += 1
-                    continue
-                results.append(row)
-                count += 1
-                if len(results) >= limit:
-                    break
-        return results
+        try:
+            # 使用 pandas 的分块读取功能
+            # skiprows 处理：跳过前 offset 行数据（注意：pandas 的 skiprows 包含表头处理逻辑）
+            # 我们通过指定 header=0 并配合 skiprows 来精确定位
+            df = pd.read_csv(
+                self.file_path,
+                sep=self.delimiter,
+                skiprows=range(1, offset + 1) if offset > 0 else None,
+                nrows=limit,
+                encoding='utf-8'
+            )
+            # 处理 NaN 值，将其转换为 None 保持与原有字典结构一致
+            return df.where(pd.notnull(df), None).to_dict('records')
+        except pd.errors.EmptyDataError:
+            return []
+        except Exception:
+            return []
 
     def size(self) -> int:
+        """
+        利用 Pandas 引擎准确统计物理记录数（无视单元格内换行）
+        """
         if not os.path.exists(self.file_path):
             return 0
-        with open(self.file_path, 'r', newline='', encoding='utf-8') as f:
-            # 减去表头行
-            return max(0, sum(1 for _ in f) - 1)
+        try:
+            # 性能优化：只读取第一列，不加载全量数据
+            # 这样既能识别转义换行符，又避免了内存爆炸
+            df_iter = pd.read_csv(
+                self.file_path, 
+                sep=self.delimiter, 
+                usecols=[0], 
+                chunksize=10000, 
+                encoding='utf-8'
+            )
+            return sum(len(chunk) for chunk in df_iter)
+        except Exception:
+            return 0
 
     def clear(self) -> None:
         if os.path.exists(self.file_path):
