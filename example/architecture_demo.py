@@ -99,8 +99,10 @@ class SegmentOperator(FunctionOperator):
             text = item.get("llm_output", "")
             # 简单模拟分词：按空格或标点拆分
             words = text.replace(".", "").replace(",", "").split()
+            # 核心改进：使用框架自动注入的 _i 作为物理溯源 ID
+            parent_i = item.get("_i")
             # 返回一个列表，框架会自动将其扁平化并作为多个独立 items 输出
-            return [{"word": w, "parent_id": item.get("id")} for w in words]
+            return [{"word": w, "parent_i": parent_i} for w in words]
         super().__init__(func=segment_func)
 
 def setup_data(file_path, count=100):
@@ -505,7 +507,7 @@ def run_case_13():
 if __name__ == "__main__":
     setup_llm_model()
     
-    run_case_1()
+    # run_case_1()
     # run_case_2()
     # run_case_3()
     # run_case_4()
@@ -513,8 +515,8 @@ if __name__ == "__main__":
     # run_case_6()
     # run_case_7()
     # run_case_8()
-    # run_case_9()
-    # run_case_10()
-    # run_case_11()
-    # run_case_12()
-    # run_case_13()
+    run_case_9()
+    run_case_10()
+    run_case_11()
+    run_case_12()
+    run_case_13()

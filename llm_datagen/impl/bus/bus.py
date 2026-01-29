@@ -290,7 +290,13 @@ class GenericReader(IReader):
                 # 核心修复：优先使用物理行号作为索引兜底，确保恢复后 ID 绝对连续
                 physical_idx = self._completed + i
                 idx = raw["_i"] if isinstance(raw, dict) and "_i" in raw else physical_idx
-                data_list.append(raw.get("data", raw) if isinstance(raw, dict) else raw)
+                item = raw.get("data", raw) if isinstance(raw, dict) else raw
+                
+                # 注入 _i 到数据中，方便算子层读取父级 ID
+                if isinstance(item, dict):
+                    item["_i"] = idx
+                
+                data_list.append(item)
                 id_list.append(idx)
             
             if data_list: 
@@ -379,10 +385,13 @@ class GenericWriter(IWriter):
             start_idx = self._written_count + len(all_envelopes)
             for i, it in enumerate(items):
                 if it is None: continue
+                # 默认 ID 分配逻辑
                 idx = anchors[i] if (anchors and i < len(anchors)) else f"auto_{start_idx + i}"
                 
                 if isinstance(it, dict):
-                    it["_i"] = idx
+                    # 核心变更：如果用户已经在算子中手动设置了 _i，则尊重它
+                    if "_i" not in it:
+                        it["_i"] = idx
                     all_envelopes.append(it)
                 else:
                     all_envelopes.append({"_i": idx, "data": it})

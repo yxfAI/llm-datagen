@@ -23,7 +23,7 @@ from .pipeline import (
     IRecoverableSequentialPipeline,
     IRecoverableStreamingPipeline
 )
-from .operators import IOperator, ISingleOperator, IBatchOperator
+from .operators import IOperator
 from .llm import ILLMClient, IBatchLLMClient, IModelContainer
 from .exceptions import DataGenError, CancelledError, BusError, NodeError, OperatorError, LLMError
 from .runtime import IRuntime, PipelineRuntimeData
@@ -61,8 +61,7 @@ __all__ = [
     
     # Operators
     "IOperator",
-    "ISingleOperator",
-    "IBatchOperator",
+    "BaseOperator",
     
     # Others
     "ILLMClient",

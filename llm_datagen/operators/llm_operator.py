@@ -2,7 +2,7 @@
 import json
 import logging
 from typing import List, Any, Dict, Optional
-from llm_datagen.core.operators import IBatchOperator, BaseOperator
+from llm_datagen.core.operators import IOperator, BaseOperator
 from llm_datagen.core.node import INodeContext
 from llm_datagen.llm.client import BatchLLMClient
 

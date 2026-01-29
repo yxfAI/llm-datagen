@@ -49,14 +49,8 @@ Node 负责“意图”到“执行”的转换。
 *   你可以重写 `_ensure_impl` 来根据参数实例化不同的底层引擎。
 *   利用 `NodeContextImpl` 实现与外部的监控闭环。
 
-### 2.2 深度审计机制 (MRO Audit)
-DataGen 使用继承链审计（MRO Audit）来确保组件兼容性。
-如果你设计了一个新的 Pipeline，可以通过声明 `REQUIRED_BUS_PROTOCOLS` 来强制要求总线必须具备的能力：
-```python
-class MyHighReliabilityPipeline(BasePipeline):
-    # 强制要求所有接入的 Bus 必须支持持久化和恢复
-    REQUIRED_BUS_PROTOCOLS = [PersistenceProtocol, RecoveryProtocol]
-```
+### 2.2 算子容器逻辑
+Node 应通过调用算子的 `process_batch` 方法来处理数据。自 1.1.0 起，框架不再支持单条处理 `process_item` 的自适应包装，所有算子均需遵循批量处理契约。
 
 ---
 

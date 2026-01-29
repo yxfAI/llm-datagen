@@ -1,6 +1,6 @@
 """Operator 实现：通用算子"""
 from .llm_operator import GenericLLMOperator
-from llm_datagen.core.operators import ISingleOperator, IBatchOperator, BaseOperator
+from llm_datagen.core.operators import IOperator, BaseOperator
 from typing import Any, Callable, List, Dict
 
 __all__ = [
@@ -32,18 +32,27 @@ class FunctionOperator(BaseOperator):
         """算子类型标识"""
         return "function"
     
-    def process_item(self, item: Any, ctx: Any = None) -> Any:
+    def process_batch(self, items: List[Any], ctx: Any = None) -> List[Any]:
         """
-        处理单项数据
+        处理批量数据
         
         Args:
-            item: 单条数据
+            items: 数据列表
             ctx: 节点上下文（可选）
         
         Returns:
-            处理结果
+            处理结果列表
         """
-        return self.func(item)
+        results = []
+        for item in items:
+            res = self.func(item)
+            if res is None:
+                continue
+            if isinstance(res, list):
+                results.extend(res)
+            else:
+                results.append(res)
+        return results
 
 
 class FilterOperator(BaseOperator):
@@ -66,15 +75,15 @@ class FilterOperator(BaseOperator):
         """算子类型标识"""
         return "filter"
     
-    def process_item(self, item: Any, ctx: Any = None) -> Any:
+    def process_batch(self, items: List[Any], ctx: Any = None) -> List[Any]:
         """
-        处理单项数据（过滤）
+        处理批量数据（过滤）
         
         Args:
-            item: 单条数据
+            items: 数据列表
             ctx: 节点上下文（可选）
         
         Returns:
-            如果 predicate 返回 True，返回原数据；否则返回 None（会被过滤掉）
+            经过过滤后的数据列表
         """
-        return item if self.predicate(item) else None
+        return [item for item in items if self.predicate(item)]

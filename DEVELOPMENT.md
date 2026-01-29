@@ -13,7 +13,7 @@
 
 ## 1. 整体生态定位
 
-llm-datagen 在整个数据处理生态中处于**最底层的算力引擎**位置。它向上支撑编排框架，向下直接驱动物理 I/O。
+llm-datagen 在整个数据处理生态中处于**最底层的算力引擎**位置。它向上支撑编排框架，向下直接驱动物理 I/O Boris。
 
 ```text
 ┌─────────────────────────────────────────────────────────┐
@@ -38,7 +38,7 @@ llm-datagen 在整个数据处理生态中处于**最底层的算力引擎**位�
 
 ### 2.1 引擎与逻辑彻底解耦 (Engine-Logic Decoupling)
 *   **Node 是躯干，Operator 是灵魂**：Node 负责处理生命周期、并发调度、I/O 绑定及断点位点；Operator 仅负责纯粹的业务计算。
-*   **自适应容器 (Adaptive Containers)**：`OperatorNode` 具备动态能力探测。无论算子实现的是 `process_item` 还是 `process_batch`，容器都会自动适配。对于单条算子，容器会自动在批次内部开启多线程并发，实现计算效率最大化。
+*   **Batch-First**：自 1.1.0 起，框架全面转向批量处理模式。算子必须实现 `process_batch` 以确保在大规模处理时的最高吞吐量。
 
 ### 2.2 路径自动焊接 (Path Auto-Welding)
 llm-datagen 采用 **“意图驱动”** 的路径解析策略：
@@ -61,7 +61,7 @@ llm-datagen 采用 **“意图驱动”** 的路径解析策略：
 | **Pipeline** | `IPipeline` | 拓扑规划、生命周期控制、状态机管理。 |
 | **Node** | `INode` | 环境激活 (Open) -> 循环处理 (Run) -> 物理结项 (Close)。 |
 | **Bus** | `IPipelineBus` | URI 寻址、Reader/Writer 实例化、中间路径自愈。 |
-| **Operator** | `BaseOperator` | 提供 `process_item` 和 `process_batch` 的双向自适应适配。 |
+| **Operator** | `BaseOperator` | 提供 `process_batch` 强制契约，确保批量处理的高性能。 |
 | **Context** | `INodeContext` | 运行时身份工牌（pid/nid）、进度汇报、Token 审计、取消信号。 |
 
 ### 3.2 工业实现层 (llm_datagen.impl) - 动力源泉
@@ -106,7 +106,7 @@ llm-datagen 支持根据业务复杂度“丝滑切换”运行模式：
     *   **协议**：建议 `jsonl://` 开启断点续传。
 3.  **高级：全链路流式 (Streaming Mode)**
     *   **配置**：`streaming=True`, `parallel_size=N`
-    *   **场景**：上下游节点协同工作，消除等待间隔。利用 `process_item` 的**批次内线程池并发**压榨 I/O。
+    *   **场景**：上下游节点协同工作，消除等待间隔。利用 **Batch-First** 模式压榨 I/O。
     *   **协议**：支持 `csv://` 或 `jsonl://`，内置“零进度退火”防御早产 EOF。
 4.  **旗舰：工业级生产 (Recoverable & Async Mode)**
     *   **配置**：`WriterConfig(async_mode=True, queue_size=K)` (断点续传默认为物理持久化协议开启)

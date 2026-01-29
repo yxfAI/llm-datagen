@@ -66,9 +66,9 @@ classDiagram
 ```
 
 ### 1.2 核心特性
-*   **引擎自适应**：`UnifiedNode` 根据 `parallel_size` 自动切换单线程、多线程或项级并行引擎。
-*   **算子多态适配**：`OperatorNode` 及其子类支持 `IBatchOperator` 和 `ISingleOperator` 的自动适配。
-    *   **批次内并发**：对于仅实现 `process_item` 的单条算子，容器会自动利用 `ThreadPoolExecutor` 在批次内部开启并发执行（并发数 = `batch_size`），极大提升了传统函数的处理性能。
+*   **引擎自适应**：`UnifiedNode` 根据 `parallel_size` 自动切换单线程或多线程引擎。
+*   **算子契约**：所有算子必须实现 `IOperator` 接口的 `process_batch` 方法。
+*   **Batch-First**：自 1.1.0 起，全面转向批量处理。这确保了在大规模处理（如 LLM 调用）时的最高性能。
 *   **搬运工模式 (Hauler Pattern)**：
     *   **InputNode**：从全局 URI (如 OSS) 搬运到流水线首个算子的输入。
     *   **OutputNode**：从最后一个算子的输出搬运到全局结果 URI (如 CSV)。
@@ -124,7 +124,7 @@ classDiagram
     *   **背压控制**：支持 `WriterConfig` 配置，通过有界队列 (`queue_size`) 实现传输级背压，防止 OOM。
     *   **聚合策略**：支持按 `flush_batch_size` 或 `flush_interval` 自动聚合写入，优化 I/O 吞吐。
 *   **早产 EOF 防御 (Premature EOF Defense)**：
-    *   `StreamBridge` 具备零进度退火重试机制，确保下游 Reader 不会因为上游的极微小启动延迟 ed 误判结束。
+    *   `StreamBridge` 具备零进度退火重试机制，确保下游 Reader 不会因为上游的极微小启动延迟而误判结束。
 *   **路径推导公式**：
     **`逻辑 URI` = `协议头` + `逻辑前缀` + `PipelineID` + `/` + `NodeID` + `后缀`**
 *   **物理密封机制 (.done)**：
@@ -238,7 +238,7 @@ llm-datagen 的生命周期是一场由 Pipeline 指挥、Node 执行、Bus 封�
    │    ├── self.save_runtime(): 物理写入 runtime.json (蓝图落盘)
    │    └── FOR node IN nodes: 
    │         └── node.set_context(ctx): 注入监控、日志和存盘函数
-   │
+
    ├── FOR node IN nodes: 【调度循环】
    │    │
    │    ├── node.open(): 【IO 激活】
@@ -258,7 +258,7 @@ llm-datagen 的生命周期是一场由 Pipeline 指挥、Node 执行、Bus 封�
    │    └── node.close(): 【节点结项】
    │         ├── [Bus 调用]: reader/writer.close() -> 释放句柄
    │         └── [Bus 调用]: stream.seal() -> 贴上 .done 封条 (物理创建 done 文件)
-   │
+
    └── Pipeline.close(): 打印最终分析报告，标记整个 Pipeline 为 SUCCESS
 ```
 
@@ -304,7 +304,7 @@ llm-datagen 的生命周期是一场由 Pipeline 指挥、Node 执行、Bus 封�
    │    │    └── [同新建逻辑]: 从 500 行开始继续往下处理
    │    │
    │    └── node.close(): 贴上最终封条
-   │
+
    └── Pipeline.close()
 ```
 

@@ -8,7 +8,7 @@ from typing import Any, List, Optional, Dict, Callable
 from concurrent.futures import ThreadPoolExecutor
 
 from llm_datagen.core.node import INode, IBatchNode, IRecoverableNode, NodeStatus
-from llm_datagen.core.operators import IOperator, ISingleOperator, IBatchOperator
+from llm_datagen.core.operators import IOperator, BaseOperator
 from llm_datagen.core.config import WriterConfig
 
 # ------------------- 节点级 Logger 配置 -------------------
@@ -439,7 +439,7 @@ class OperatorNode(BatchNode):
     """通用算子容器：自动识别并适配 Batch/Single 算子，支持批次内并发"""
     def __init__(self, 
                  node_id: str, 
-                 operator: IOperator, 
+                 operator: BaseOperator, 
                  input_uri: Optional[str] = None,
                  output_uri: Optional[str] = None,
                  protocol_prefix: str = "",
@@ -450,38 +450,14 @@ class OperatorNode(BatchNode):
         self._operator = operator
 
     def process_batch(self, data: List[Any]) -> List[Any]:
-        # 1. 场景 A：算子原生支持批量 (IBatchOperator) -> 直接交给算子执行
-        if hasattr(self._operator, "process_batch"):
-            return self._operator.process_batch(data, ctx=self._ctx)
-        
-        # 2. 场景 B：算子只有单条处理能力 (ISingleOperator) -> 容器层根据 batch_size 执行批次内并发
-        if hasattr(self._operator, "process_item"):
-            current_batch_size = len(data)
-            
-            # 如果批次大于 1，则开启批次内并发以压榨性能
-            if current_batch_size > 1:
-                with ThreadPoolExecutor(max_workers=current_batch_size) as executor:
-                    futures = [executor.submit(self._operator.process_item, item, self._ctx) for item in data]
-                    results = []
-                    for f in futures:
-                        res = f.result()
-                        # 兼容 1:N 爆炸分发与过滤
-                        if isinstance(res, list): results.extend(res)
-                        elif res is not None: results.append(res)
-                    return results
-            else:
-                # 只有 1 条数据时，保持串行调用
-                res = self._operator.process_item(data[0], ctx=self._ctx)
-                if isinstance(res, list): return res
-                return [res] if res is not None else []
-        
-        raise TypeError(f"算子 {self._operator.__class__.__name__} 未实现 process_batch 或 process_item")
+        # 直接执行算子批量逻辑
+        return self._operator.process_batch(data, ctx=self._ctx)
 
 class ParallelOperatorNode(ParallelBatchNode):
     """并行算子容器：手动实现自适应 process_batch 以规避 MRO 冲突"""
     def __init__(self, 
                  node_id: str, 
-                 operator: IOperator, 
+                 operator: BaseOperator, 
                  input_uri: Optional[str] = None,
                  output_uri: Optional[str] = None,
                  protocol_prefix: str = "",
@@ -494,32 +470,8 @@ class ParallelOperatorNode(ParallelBatchNode):
         self._operator = operator
 
     def process_batch(self, data: List[Any]) -> List[Any]:
-        # 1. 场景 A：算子原生支持批量 (IBatchOperator) -> 直接交给算子执行
-        if hasattr(self._operator, "process_batch"):
-            return self._operator.process_batch(data, ctx=self._ctx)
-        
-        # 2. 场景 B：算子只有单条处理能力 (ISingleOperator) -> 容器层根据 batch_size 执行批次内并发
-        if hasattr(self._operator, "process_item"):
-            current_batch_size = len(data)
-            
-            # 如果批次大于 1，则开启批次内并发以压榨性能
-            if current_batch_size > 1:
-                with ThreadPoolExecutor(max_workers=current_batch_size) as executor:
-                    futures = [executor.submit(self._operator.process_item, item, self._ctx) for item in data]
-                    results = []
-                    for f in futures:
-                        res = f.result()
-                        # 兼容 1:N 爆炸分发与过滤
-                        if isinstance(res, list): results.extend(res)
-                        elif res is not None: results.append(res)
-                    return results
-            else:
-                # 只有 1 条数据时，保持串行调用
-                res = self._operator.process_item(data[0], ctx=self._ctx)
-                if isinstance(res, list): return res
-                return [res] if res is not None else []
-        
-        raise TypeError(f"算子 {self._operator.__class__.__name__} 未实现 process_batch 或 process_item")
+        # 直接执行算子批量逻辑
+        return self._operator.process_batch(data, ctx=self._ctx)
 
 # 向后兼容别名：现在所有算子节点都具备自适应能力
 BatchOperatorNode = OperatorNode
@@ -667,7 +619,7 @@ class UnifiedNode(BaseNode):
 
 class UnifiedOperatorNode(UnifiedNode):
     def __init__(self, 
-                 operator: IOperator,
+                 operator: BaseOperator,
                  node_id: str = None,
                  input_uri: Optional[str] = None,
                  output_uri: Optional[str] = None,
