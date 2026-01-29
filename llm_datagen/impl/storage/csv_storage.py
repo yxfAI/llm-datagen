@@ -1,3 +1,4 @@
+import threading
 import os
 import pandas as pd
 from typing import List, Any
@@ -12,20 +13,18 @@ class CsvStorage(IStorage):
         self.file_path = file_path
         self.delimiter = delimiter
         self._done_file = f"{file_path}.done"
+        self._cached_size = None # 实例级缓存
         os.makedirs(os.path.dirname(os.path.abspath(file_path)), exist_ok=True)
 
     def append(self, items: List[Any]) -> None:
         if not items:
             return
         
-        # 确保数据格式统一为 DataFrame
         valid_items = [item if isinstance(item, dict) else {"data": item} for item in items]
         df = pd.DataFrame(valid_items)
         
         file_exists = os.path.exists(self.file_path)
         
-        # 使用 pandas 的追加模式
-        # 如果文件不存在，写入表头；如果已存在，则不写表头
         df.to_csv(
             self.file_path, 
             mode='a', 
@@ -34,15 +33,16 @@ class CsvStorage(IStorage):
             sep=self.delimiter,
             encoding='utf-8'
         )
+        
+        # 仅更新本实例缓存
+        if self._cached_size is not None:
+            self._cached_size += len(valid_items)
 
     def read(self, offset: int, limit: int) -> List[Any]:
         if not os.path.exists(self.file_path):
             return []
             
         try:
-            # 使用 pandas 的分块读取功能
-            # skiprows 处理：跳过前 offset 行数据（注意：pandas 的 skiprows 包含表头处理逻辑）
-            # 我们通过指定 header=0 并配合 skiprows 来精确定位
             df = pd.read_csv(
                 self.file_path,
                 sep=self.delimiter,
@@ -50,7 +50,6 @@ class CsvStorage(IStorage):
                 nrows=limit,
                 encoding='utf-8'
             )
-            # 处理 NaN 值，将其转换为 None 保持与原有字典结构一致
             return df.where(pd.notnull(df), None).to_dict('records')
         except pd.errors.EmptyDataError:
             return []
@@ -59,13 +58,15 @@ class CsvStorage(IStorage):
 
     def size(self) -> int:
         """
-        利用 Pandas 引擎准确统计物理记录数（无视单元格内换行）
+        利用 Pandas 引擎准确统计物理记录数。
         """
         if not os.path.exists(self.file_path):
             return 0
+            
+        if self._cached_size is not None:
+            return self._cached_size
+            
         try:
-            # 性能优化：只读取第一列，不加载全量数据
-            # 这样既能识别转义换行符，又避免了内存爆炸
             df_iter = pd.read_csv(
                 self.file_path, 
                 sep=self.delimiter, 
@@ -73,7 +74,8 @@ class CsvStorage(IStorage):
                 chunksize=10000, 
                 encoding='utf-8'
             )
-            return sum(len(chunk) for chunk in df_iter)
+            self._cached_size = sum(len(chunk) for chunk in df_iter)
+            return self._cached_size
         except Exception:
             return 0
 
@@ -82,11 +84,13 @@ class CsvStorage(IStorage):
             os.remove(self.file_path)
         if os.path.exists(self._done_file):
             os.remove(self._done_file)
+        self._cached_size = 0
 
     def reset_finished(self):
         """核心修复：撕掉旧封条，让流重新激活"""
         if os.path.exists(self._done_file):
             os.remove(self._done_file)
+        self._cached_size = None
 
     def mark_finished(self):
         with open(self._done_file, 'w', encoding='utf-8') as f:

@@ -29,7 +29,7 @@ from .core.hooks import (
 # 常用算子导出
 from .operators import (
     GenericLLMOperator,
-    FunctionOperator
+    BaseOperator
 )
 
 # 向后兼容导出 (别名处理)
@@ -66,7 +66,7 @@ __all__ = [
     "WriterConfig",
     # Operators
     "GenericLLMOperator",
-    "FunctionOperator",
+    "BaseOperator",
     # Compatibility Aliases
     "GenericBatchNode",
     "GenericBus",

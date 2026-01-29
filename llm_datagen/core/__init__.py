@@ -23,7 +23,7 @@ from .pipeline import (
     IRecoverableSequentialPipeline,
     IRecoverableStreamingPipeline
 )
-from .operators import IOperator
+from .operators import IOperator, BaseOperator
 from .llm import ILLMClient, IBatchLLMClient, IModelContainer
 from .exceptions import DataGenError, CancelledError, BusError, NodeError, OperatorError, LLMError
 from .runtime import IRuntime, PipelineRuntimeData

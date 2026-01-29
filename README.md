@@ -50,25 +50,23 @@ pip install llm-datagen
 ### 3.2 极简管道示例
 
 ```python
-from llm_datagen import UnifiedPipeline, FunctionOperator
+from llm_datagen import UnifiedPipeline, BaseOperator
 
-# 1. 定义简单的逻辑算子 (现在推荐使用批量处理逻辑)
-def clean_texts(items):
-    # 处理逻辑：如清洗、转换、格式化
-    return [{"text": it["text"].strip(), "len": len(it["text"])} for it in items]
+# 1. 定义算子：继承 BaseOperator 实现批量逻辑
+class CleanOperator(BaseOperator):
+    def process_batch(self, items, ctx=None):
+        return [{"text": it["text"].strip(), "len": len(it["text"])} for it in items]
 
 # 2. 构建高性能管道
-pipeline = UnifiedPipeline(operators=[
-    FunctionOperator(clean_texts)
-])
-
-# 3. 运行任务：自动处理并发、背压与路径寻址
-pipeline.create(
-    pipeline_id="my_first_task",
+pipeline = UnifiedPipeline(
+    operators=[CleanOperator()],
     input_uri="jsonl://input.jsonl",
     output_uri="jsonl://output.jsonl",
-    parallel_size=10  # 开启 10 个跨批次并行
+    parallel_size=10  # 开启 10 个并发处理
 )
+
+# 3. 运行任务
+pipeline.create(pipeline_id="my_first_task")
 pipeline.run()
 ```
 

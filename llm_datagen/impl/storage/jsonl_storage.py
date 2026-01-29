@@ -9,6 +9,7 @@ class JsonlStorage(IStorage):
     def __init__(self, file_path: str):
         self.file_path = file_path
         self._done_file = f"{file_path}.done" # 物理结束标记文件
+        self._cached_size = None # 缓存计数
         self._ensure_dir()
 
     def _ensure_dir(self):
@@ -17,6 +18,7 @@ class JsonlStorage(IStorage):
             os.makedirs(dir_path, exist_ok=True)
 
     def append(self, items: List[Any]) -> None:
+        count = 0
         with open(self.file_path, 'a', encoding='utf-8') as f:
             for item in items:
                 # 修复：跳过空项，避免写入空行
@@ -26,6 +28,11 @@ class JsonlStorage(IStorage):
                 if isinstance(item, dict) and not item:
                     continue
                 f.write(json.dumps(item, ensure_ascii=False) + '\n')
+                count += 1
+        
+        # 增量更新缓存
+        if self._cached_size is not None:
+            self._cached_size += count
 
     def read(self, offset: int, limit: int) -> List[Any]:
         results = []
@@ -59,10 +66,16 @@ class JsonlStorage(IStorage):
         return os.path.exists(self._done_file)
 
     def size(self) -> int:
+        """带缓存的计数，避免重复扫描全表"""
         if not os.path.exists(self.file_path):
             return 0
+        
+        if self._cached_size is not None:
+            return self._cached_size
+            
         with open(self.file_path, 'r', encoding='utf-8') as f:
-            return sum(1 for _ in f)
+            self._cached_size = sum(1 for _ in f)
+            return self._cached_size
 
     def clear(self) -> None:
         """彻底清理，包括物理标记"""
@@ -70,8 +83,10 @@ class JsonlStorage(IStorage):
             os.remove(self.file_path)
         if os.path.exists(self._done_file):
             os.remove(self._done_file)
+        self._cached_size = 0
 
     def reset_finished(self):
         """核心修复：撕掉旧封条，让流重新激活"""
         if os.path.exists(self._done_file):
             os.remove(self._done_file)
+        self._cached_size = None # 重置缓存，强制重新扫描

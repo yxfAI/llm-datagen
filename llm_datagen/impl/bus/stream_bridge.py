@@ -67,7 +67,5 @@ class StreamBridge:
                 if final_batch:
                     yield final_batch
                     current_offset += len(final_batch)
-                else:
-                    # 核心改进：如果既没信号也没物理数据，短暂休眠避免 CPU 空转
-                    time.sleep(0.1)
+                # 优化：移除冗余 time.sleep(0.1)，wait(timeout) 已经提供了等待机制
                 continue

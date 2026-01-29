@@ -297,14 +297,21 @@ class BatchNode(BaseNode, IBatchNode):
         # 核心修复：同步总量（流式模式下总量会随上游写入而增长）
         self._total_progress = reader.total_count
 
+        # 优化：状态对齐频率控制
+        batch_counter = 0
+
         try:
             for data, ids in reader.read(batch_size=self._batch_size):
                 self._check_cancelled()
+                batch_counter += 1
                 
-                # At-most-once: 读后即存。优点：绝不重复执行（省 Token）；缺点：崩溃会导致本批次丢数。
+                # At-most-once: 读后即存。
                 self._current_progress = reader.completed_count
-                if self._total_progress <= 0 or reader.total_count > self._total_progress:
-                    self._total_progress = reader.total_count
+                
+                # 优化：每 10 批次才执行一次物理总量对齐，降低 CPU 抖动
+                if batch_counter % 10 == 0 or self._total_progress <= 0:
+                    if reader.total_count > self._total_progress:
+                        self._total_progress = reader.total_count
 
                 if self._ctx: 
                     self._ctx.report_progress(self._current_progress, self._total_progress)
@@ -368,18 +375,25 @@ class ParallelBatchNode(BatchNode):
         semaphore = threading.BoundedSemaphore(self._parallel_size)
         futures = set()
 
+        # 优化：状态对齐频率控制
+        batch_counter = 0
+
         try:
             with ThreadPoolExecutor(max_workers=self._parallel_size) as executor:
                 for data, ids in reader.read(batch_size=self._batch_size):
                     self._check_cancelled()
+                    batch_counter += 1
                     
                     # 1. 阻塞点：如果线程池太忙，此处会阻塞
                     semaphore.acquire()
                     
-                    # 2. At-most-once: 派发前即存盘。确保任务一旦进入队列即视为已处理，即便子线程崩溃也不重跑。
+                    # 2. At-most-once: 派发前即存盘。
                     self._current_progress = reader.completed_count
-                    if self._total_progress <= 0 or reader.total_count > self._total_progress:
-                        self._total_progress = reader.total_count
+                    
+                    # 优化：每 10 批次才执行一次物理总量对齐
+                    if batch_counter % 10 == 0 or self._total_progress <= 0:
+                        if reader.total_count > self._total_progress:
+                            self._total_progress = reader.total_count
                     
                     if self._ctx: 
                         self._ctx.report_progress(self._current_progress, self._total_progress)

@@ -18,7 +18,7 @@ from llm_datagen import (
     UnifiedNodePipeline,
     UnifiedPipeline,
     GenericLLMOperator,
-    FunctionOperator,
+    BaseOperator,
     UnifiedNode,
     WriterConfig
 )
@@ -74,36 +74,41 @@ class TranslationOperator(GenericLLMOperator):
                 results.append(res_item)
             return results
 
-class FilterOperator(FunctionOperator):
+class FilterOperator(BaseOperator):
     """过滤算子：仅保留长度大于 15 的结果"""
     def __init__(self, min_len: int = 15):
-        def filter_func(item: Any):
-            text = item.get("llm_output", "")
-            # 返回空列表表示过滤掉该项
-            return [item] if len(text) > min_len else []
-        super().__init__(func=filter_func)
+        self.min_len = min_len
 
-class WordCountOperator(FunctionOperator):
+    def process_batch(self, items: List[Any], ctx: Any = None) -> List[Any]:
+        results = []
+        for item in items:
+            text = item.get("llm_output", "")
+            if len(text) > self.min_len:
+                results.append(item)
+        return results
+
+class WordCountOperator(BaseOperator):
     """统计算子：统计单词个数"""
-    def __init__(self):
-        def count_words(item: Any):
+    def process_batch(self, items: List[Any], ctx: Any = None) -> List[Any]:
+        for item in items:
             text = item.get("llm_output", "")
             item["word_count"] = len([w for w in text.split() if w.strip()])
-            return item
-        super().__init__(func=count_words)
+        return items
 
-class SegmentOperator(FunctionOperator):
+class SegmentOperator(BaseOperator):
     """分词算子：将一段文字拆分为多个单词项 (1:N 模式)"""
-    def __init__(self):
-        def segment_func(item: Any):
+    def process_batch(self, items: List[Any], ctx: Any = None) -> List[Any]:
+        outputs = []
+        for item in items:
             text = item.get("llm_output", "")
             # 简单模拟分词：按空格或标点拆分
             words = text.replace(".", "").replace(",", "").split()
             # 核心改进：使用框架自动注入的 _i 作为物理溯源 ID
             parent_i = item.get("_i")
-            # 返回一个列表，框架会自动将其扁平化并作为多个独立 items 输出
-            return [{"word": w, "parent_i": parent_i} for w in words]
-        super().__init__(func=segment_func)
+            # 产生多个独立 items 输出
+            for w in words:
+                outputs.append({"word": w, "parent_i": parent_i})
+        return outputs
 
 def setup_data(file_path, count=100):
     """准备模拟数据"""
@@ -351,7 +356,7 @@ def run_case_8():
 def run_case_9():
     print("\n>>> 场景 9: 异步写入压力测试 (WriterConfig Stress Test)")
     input_file = "tmp/demo/case9_input.jsonl"
-    setup_data(input_file, count=10000)
+    setup_data(input_file, count=1000)
     
     # 配置高性能异步写入策略
     writer_cfg = WriterConfig(
@@ -392,15 +397,14 @@ def run_case_10():
     input_file = "tmp/demo/case10_input.jsonl"
     setup_data(input_file, count=20)
     
-    class SlowStartupOperator(FunctionOperator):
+    class SlowStartupOperator(BaseOperator):
         """模拟一个启动极慢的上游，诱发下游早产 EOF"""
-        def __init__(self):
-            def slow_func(item):
+        def process_batch(self, items: List[Any], ctx: Any = None) -> List[Any]:
+            for item in items:
                 # 第一条数据故意延迟很久才产出
                 if item.get("id") == 0:
                     time.sleep(2.0) 
-                return item
-            super().__init__(func=slow_func)
+            return items
 
     pipeline = UnifiedPipeline(
         operators=[SlowStartupOperator(), WordCountOperator()],
@@ -516,7 +520,7 @@ if __name__ == "__main__":
     # run_case_7()
     # run_case_8()
     run_case_9()
-    run_case_10()
-    run_case_11()
-    run_case_12()
-    run_case_13()
+    # run_case_10()
+    # run_case_11()
+    # run_case_12()
+    # run_case_13()

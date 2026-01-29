@@ -432,19 +432,37 @@ class StreamFactory:
         return UnifiedFileStream().create(uri, protocol_prefix, base_path)
 
 class RecoverableStreamFactory(StreamFactory):
-    @staticmethod
-    def create(uri: str, protocol_prefix: str = "", base_path: str = "") -> Optional[IRecoverableStream]:
+    def __init__(self):
+        self._pool = {} # 流对象池
+
+    def create(self, uri: str, protocol_prefix: str = "", base_path: str = "") -> Optional[IRecoverableStream]:
         if uri is None: return None
         if uri.startswith("memory://"): raise ValueError("RecoverableStreamFactory does not support 'memory://'.")
-        return UnifiedFileStream().create(uri, protocol_prefix, base_path)
+        
+        # 缓存键：由 URI, prefix 和 base_path 组成
+        key = (uri, protocol_prefix, base_path)
+        if key not in self._pool:
+            self._pool[key] = UnifiedFileStream().create(uri, protocol_prefix, base_path)
+        return self._pool[key]
 
-    @staticmethod
-    def resume(runtime_data: Dict[str, Any]) -> Optional[IRecoverableStream]:
+    def resume(self, runtime_data: Dict[str, Any]) -> Optional[IRecoverableStream]:
         if not runtime_data: return None
-        stream = UnifiedFileStream()
-        stream.resume_from_runtime(runtime_data)
-        if not stream.is_opened: stream.open()
-        return stream
+        
+        uri = runtime_data.get("uri")
+        prefix = runtime_data.get("protocol_prefix", "")
+        base = runtime_data.get("base_path", "")
+        key = (uri, prefix, base)
+        
+        if key not in self._pool:
+            stream = UnifiedFileStream()
+            stream.resume_from_runtime(runtime_data)
+            if not stream.is_opened: stream.open()
+            self._pool[key] = stream
+            
+        return self._pool[key]
+
+    def clear_pool(self):
+        self._pool.clear()
 
 def get_protocol_extension(protocol: str) -> str:
     if not protocol: return ".jsonl"

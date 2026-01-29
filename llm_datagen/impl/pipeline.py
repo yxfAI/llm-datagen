@@ -28,15 +28,14 @@ if not _platform_logger.handlers:
         pass
 
 from llm_datagen.core.pipeline import (
-    IPipeline, ISequentialPipeline, IStreamingPipeline, IRecoverablePipeline,
+ ISequentialPipeline, IStreamingPipeline, IRecoverablePipeline,
     PipelineStatus
 )
 from llm_datagen.core.config import NodeConfig, WriterConfig
 from llm_datagen.core.node import INode, IRecoverableNode, NodeStatus
-from llm_datagen.core.operators import IOperator
+from llm_datagen.core.operators import BaseOperator
 from llm_datagen.core.hooks import (
     IPipelineHooks,
-    DefaultPipelineHooks, 
     JsonFileCheckpointHooks,
     PipelineHooksAdapter
 )
@@ -539,7 +538,7 @@ class UnifiedOperatorPipeline(UnifiedNodePipeline):
     LOG_TAG = "Unified"
 
     def __init__(self, 
-                 operators: List[IOperator] = None, 
+                 operators: List[BaseOperator] = None, 
                  input_uri: str = None,
                  output_uri: str = None,
                  batch_size: int = 1,
@@ -561,7 +560,13 @@ class UnifiedOperatorPipeline(UnifiedNodePipeline):
                          results_dir=results_dir,
                          writer_config=writer_config)
         self._operators = operators or []
-        self._bus_factory = bus_factory or RecoverableStreamFactory
+        # 核心修复：如果是类则实例化，确保对象池在 Pipeline 级别生效
+        if bus_factory is None:
+            self._bus_factory = RecoverableStreamFactory()
+        elif isinstance(bus_factory, type):
+            self._bus_factory = bus_factory()
+        else:
+            self._bus_factory = bus_factory
         
         # 编排特有参数
         self._input_uri = input_uri
